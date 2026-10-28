@@ -1332,7 +1332,7 @@ ${
       if (CUSTOM_HEADER !== '') {
         element.prepend(CUSTOM_HEADER, { html: true });
       }
-      element.append(\`<div style="display:none">Powered by <a href="http://worknot.classmethod.cf">Worknot</a></div>
+      element.append(\`<div style="display:none">Powered by <a href="https://worknot.classmethod.live/">Worknot</a></div>
       <script>
       if (window.CONFIG) window.CONFIG.domainBaseUrl = 'https://\${MY_DOMAIN}';
       const SLUG_TO_PAGE = \${JSON.stringify(this.SLUG_TO_PAGE).replace(/</g, '\\\\u003c')};
