@@ -2,109 +2,367 @@
 <html lang="en">
     <head>
         <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Worknot: Notion Custom Domain with Cloudflare Workers</title>
         <meta
-            name="viewport"
-            content="width=device-width, initial-scale=1, shrink-to-fit=no"
+            name="description"
+            content="Host your Notion Site on your own domain. Worknot generates a Cloudflare Worker with pretty URLs, SEO tags and analytics. Free and open source."
         />
-        <meta name="theme-color" content="#1976d2" />
+        <meta name="author" content="Classmethod (Europe) GmbH" />
+        <meta name="robots" content="index, follow, max-image-preview:large" />
+        <meta name="theme-color" content="#ffffff" />
+        <link rel="canonical" href="https://worknot.classmethod.live/" />
+        <link rel="alternate" hreflang="en" href="https://worknot.classmethod.live/" />
+        <link rel="alternate" hreflang="ja" href="https://worknot.classmethod.live/ja/" />
+        <link rel="alternate" hreflang="x-default" href="https://worknot.classmethod.live/" />
 
-        <!-- Favicon -->
         <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
         <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
 
-        <!-- SEO Meta Tags -->
-        <title>
-            Worknot - Host Notion Sites on Your Custom Domain | Cloudflare
-            Workers
-        </title>
-        <meta
-            name="description"
-            content="Host your Notion Site on a custom domain with Cloudflare Workers. Actively maintained by Classmethod and always up-to-date with the latest Notion Site specifications. Pretty URLs, image optimization, and global CDN delivery."
+        <link
+            rel="preload"
+            href="/fonts/ibm-plex-sans-latin.woff2"
+            as="font"
+            type="font/woff2"
+            crossorigin
         />
-        <meta
-            name="keywords"
-            content="Notion Site, Notion custom domain, Cloudflare Workers, Notion hosting, Notion website, pretty URLs, image optimization, Classmethod"
-        />
-        <meta name="author" content="Classmethod" />
+        <link rel="stylesheet" href="/src/styles.css" />
 
-        <!-- Open Graph / Facebook -->
         <meta property="og:type" content="website" />
         <meta property="og:url" content="https://worknot.classmethod.live/" />
+        <meta property="og:site_name" content="Worknot" />
         <meta
             property="og:title"
-            content="Worknot - Host Notion Sites on Your Custom Domain"
+            content="Worknot: Host your Notion Site on your own domain"
         />
         <meta
             property="og:description"
-            content="Host your Notion Site on a custom domain with Cloudflare Workers. Actively maintained by Classmethod, always up-to-date with the latest Notion specifications."
+            content="Generate a Cloudflare Worker that serves your Notion Site on a custom domain, with pretty URLs, SEO tags and analytics. Free and open source."
         />
-        <meta property="og:site_name" content="Worknot" />
         <meta
             property="og:image"
             content="https://worknot.classmethod.live/og-image.png"
         />
         <meta property="og:image:width" content="1200" />
         <meta property="og:image:height" content="630" />
+        <meta
+            property="og:image:alt"
+            content="Worknot by Classmethod Europe: host your Notion Site on your own domain"
+        />
         <meta property="og:locale" content="en_US" />
+        <meta property="og:locale:alternate" content="ja_JP" />
 
-        <!-- Twitter -->
         <meta name="twitter:card" content="summary_large_image" />
-        <meta name="twitter:url" content="https://worknot.classmethod.live/" />
         <meta
             name="twitter:title"
-            content="Worknot - Host Notion Sites on Your Custom Domain"
+            content="Worknot: Host your Notion Site on your own domain"
         />
         <meta
             name="twitter:description"
-            content="Host your Notion Site on a custom domain with Cloudflare Workers. Actively maintained by Classmethod, always up-to-date with the latest Notion specifications."
+            content="Generate a Cloudflare Worker that serves your Notion Site on a custom domain, with pretty URLs, SEO tags and analytics. Free and open source."
         />
         <meta
             name="twitter:image"
             content="https://worknot.classmethod.live/og-image.png"
         />
+        <meta
+            name="twitter:image:alt"
+            content="Worknot by Classmethod Europe: host your Notion Site on your own domain"
+        />
 
-        <!-- Canonical URL -->
-        <link rel="canonical" href="https://worknot.classmethod.live/" />
-
-        <!-- Structured Data (JSON-LD) -->
         <script type="application/ld+json">
             {
                 "@context": "https://schema.org",
-                "@type": "WebApplication",
-                "name": "Worknot",
-                "description": "Host your Notion Site on a custom domain with Cloudflare Workers. Generate Worker scripts to proxy Notion pages with pretty URLs and image optimization.",
-                "url": "https://worknot.classmethod.live/",
-                "applicationCategory": "DeveloperApplication",
-                "operatingSystem": "Web",
-                "offers": {
-                    "@type": "Offer",
-                    "price": "0",
-                    "priceCurrency": "USD"
-                },
-                "creator": {
-                    "@type": "Organization",
-                    "name": "Classmethod",
-                    "url": "https://classmethod.jp/"
-                }
+                "@graph": [
+                    {
+                        "@type": "Organization",
+                        "@id": "https://classmethod.de/#organization",
+                        "name": "Classmethod (Europe) GmbH",
+                        "url": "https://classmethod.de/",
+                        "logo": "https://worknot.classmethod.live/brand/classmethod-europe-black.svg"
+                    },
+                    {
+                        "@type": "WebSite",
+                        "@id": "https://worknot.classmethod.live/#website",
+                        "name": "Worknot",
+                        "url": "https://worknot.classmethod.live/",
+                        "inLanguage": ["en", "ja"],
+                        "publisher": { "@id": "https://classmethod.de/#organization" }
+                    },
+                    {
+                        "@type": "WebApplication",
+                        "name": "Worknot",
+                        "url": "https://worknot.classmethod.live/",
+                        "description": "Generates a Cloudflare Worker script that serves a Notion Site on a custom domain, with pretty URLs, SEO metadata, analytics and image optimization.",
+                        "inLanguage": "en",
+                        "applicationCategory": "DeveloperApplication",
+                        "operatingSystem": "Any",
+                        "browserRequirements": "Requires JavaScript",
+                        "isAccessibleForFree": true,
+                        "license": "https://opensource.org/license/mit",
+                        "offers": { "@type": "Offer", "price": "0", "priceCurrency": "EUR" },
+                        "publisher": { "@id": "https://classmethod.de/#organization" },
+                        "sameAs": "https://github.com/classmethod/worknot"
+                    },
+                    {
+                        "@type": "FAQPage",
+                        "inLanguage": "en",
+                        "mainEntity": [
+                            {
+                                "@type": "Question",
+                                "name": "Is Worknot free to use?",
+                                "acceptedAnswer": {
+                                    "@type": "Answer",
+                                    "text": "Yes. Worknot is open source under the MIT License. You need a Cloudflare account to run the Worker. A first visit to a Notion Site makes roughly 700 Worker requests, so the Workers Free plan (100,000 requests per day) suits small sites. Use Workers Paid for sites with regular traffic."
+                                }
+                            },
+                            {
+                                "@type": "Question",
+                                "name": "Do I need a paid Notion plan?",
+                                "acceptedAnswer": {
+                                    "@type": "Answer",
+                                    "text": "No. Worknot works with any page you publish to the web with Notion Sites. It does not use Notion's own custom domain feature."
+                                }
+                            },
+                            {
+                                "@type": "Question",
+                                "name": "What happens when Notion changes its client?",
+                                "acceptedAnswer": {
+                                    "@type": "Answer",
+                                    "text": "A GitHub Actions workflow checks Notion's client code and renders a test site every day at 06:00 UTC, and opens an issue when something changes. When a fix is released, generate the script again here and redeploy your Worker."
+                                }
+                            },
+                            {
+                                "@type": "Question",
+                                "name": "Does Worknot store my settings or content?",
+                                "acceptedAnswer": {
+                                    "@type": "Answer",
+                                    "text": "No. The generator runs entirely in your browser and does not send your settings anywhere. Your site's traffic goes through the Worker in your own Cloudflare account."
+                                }
+                            },
+                            {
+                                "@type": "Question",
+                                "name": "How is Worknot related to Fruition?",
+                                "acceptedAnswer": {
+                                    "@type": "Answer",
+                                    "text": "Worknot started as a fork of Fruition by Stephen Ou. Classmethod (Europe) GmbH maintains it and keeps it compatible with current Notion Sites."
+                                }
+                            }
+                        ]
+                    }
+                ]
             }
         </script>
-
-        <!-- DNS Prefetch -->
-        <link rel="dns-prefetch" href="https://fonts.googleapis.com" />
-        <link rel="dns-prefetch" href="https://fonts.gstatic.com" />
-
-        <!-- Fonts -->
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-        <link
-            rel="stylesheet"
-            href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
-        />
     </head>
 
     <body>
-        <noscript>You need to enable JavaScript to run this app.</noscript>
-        <div id="root"></div>
+        <a class="skip-link" href="#generator">Skip to the generator</a>
+
+        <header class="site-header">
+            <div class="container header-inner">
+                <div class="brand">
+                    <a class="brand-logo" href="https://classmethod.de/">
+                        <img
+                            src="/brand/classmethod-europe-black.svg"
+                            alt="Classmethod Europe"
+                            width="171"
+                            height="68"
+                        />
+                    </a>
+                    <span class="brand-divider" aria-hidden="true"></span>
+                    <a class="product-name" href="/">Worknot</a>
+                </div>
+                <nav class="site-nav" aria-label="Main">
+                    <a class="nav-link" href="#features">Features</a>
+                    <a class="nav-link" href="#how-it-works">How it works</a>
+                    <a class="nav-link" href="#faq">FAQ</a>
+                    <a class="nav-link" href="https://github.com/classmethod/worknot">GitHub</a>
+                    <a class="lang-switch" href="/ja/" hreflang="ja" lang="ja">日本語</a>
+                    <a class="button button-primary button-small" href="#generator">Generate script</a>
+                </nav>
+            </div>
+        </header>
+
+        <main>
+            <section class="hero">
+                <div class="container hero-grid">
+                    <div>
+                        <p class="eyebrow">Free and open source</p>
+                        <h1>Host your Notion Site on your own domain</h1>
+                        <p class="lead">
+                            Worknot generates a Cloudflare Worker script that serves
+                            your published Notion pages on your custom domain, with
+                            pretty URLs, SEO metadata and analytics.
+                        </p>
+                        <div class="actions">
+                            <a class="button button-primary" href="#generator">Generate your Worker script</a>
+                            <a class="button button-secondary" href="https://github.com/classmethod/worknot">View source on GitHub</a>
+                        </div>
+                        <ul class="facts">
+                            <li>MIT License</li>
+                            <li>Runs in your Cloudflare account</li>
+                            <li>Notion changes checked daily</li>
+                        </ul>
+                    </div>
+
+                    <figure class="flow">
+                        <div class="flow-node">
+                            <p class="flow-label">Your visitors open</p>
+                            <p class="flow-url">https://www.example.com/about</p>
+                        </div>
+                        <div class="flow-connector" aria-hidden="true"></div>
+                        <div class="flow-node is-worker">
+                            <p class="flow-label">Cloudflare Worker generated by Worknot</p>
+                            <ul class="tags">
+                                <li>Pretty URLs</li>
+                                <li>SEO tags</li>
+                                <li>Analytics</li>
+                                <li>Image optimization</li>
+                            </ul>
+                        </div>
+                        <div class="flow-connector" aria-hidden="true"></div>
+                        <div class="flow-node">
+                            <p class="flow-label">Your page on Notion Sites</p>
+                            <p class="flow-url">https://example.notion.site/About-1a2b3c</p>
+                        </div>
+                        <figcaption>
+                            Requests to your domain go through the Worker, which loads
+                            the page from Notion Sites and serves it under your address.
+                        </figcaption>
+                    </figure>
+                </div>
+            </section>
+
+            <section id="features" class="section section-alt">
+                <div class="container">
+                    <h2>What Worknot adds to your Notion Site</h2>
+                    <p class="section-lead">
+                        Configure each option in the generator below. Worknot is
+                        maintained by
+                        <a href="https://classmethod.de/">Classmethod (Europe) GmbH</a>,
+                        a Cloudflare and Notion partner.
+                    </p>
+                    <div class="feature-grid">
+                        <article class="feature">
+                            <h3>Custom domain and pretty URLs</h3>
+                            <p>Serve your Notion Site on your own domain and map pages to readable paths such as /about or /blog.</p>
+                        </article>
+                        <article class="feature">
+                            <h3>SEO metadata</h3>
+                            <p>Set page titles, descriptions, Open Graph tags, JSON-LD, hreflang, a sitemap.xml and an RSS feed.</p>
+                        </article>
+                        <article class="feature">
+                            <h3>Analytics</h3>
+                            <p>Add Google Analytics 4 or a Facebook Pixel without changing your Notion pages.</p>
+                        </article>
+                        <article class="feature">
+                            <h3>Image optimization</h3>
+                            <p>Resize, convert and compress Notion images at the edge with Cloudflare Image Transformations.</p>
+                        </article>
+                        <article class="feature">
+                            <h3>Branding and custom code</h3>
+                            <p>Add custom CSS and JavaScript, a Google Font, your favicon, header HTML and a custom 404 page.</p>
+                        </article>
+                        <article class="feature">
+                            <h3>Daily compatibility checks</h3>
+                            <p>Every day at 06:00 UTC, a scheduled job checks Notion's client code and opens a GitHub issue when something changes.</p>
+                        </article>
+                    </div>
+                </div>
+            </section>
+
+            <section id="how-it-works" class="section">
+                <div class="container">
+                    <h2>How it works</h2>
+                    <p class="section-lead">
+                        You need a page published with Notion Sites and a domain
+                        whose DNS is managed by Cloudflare.
+                    </p>
+                    <ol class="steps">
+                        <li>
+                            <h3>Publish your page</h3>
+                            <p>In Notion, open Share, choose Publish and copy the notion.site URL of your page.</p>
+                        </li>
+                        <li>
+                            <h3>Generate the script</h3>
+                            <p>Enter your domain and the Notion URL below, add pretty links and optional settings, then copy the script.</p>
+                        </li>
+                        <li>
+                            <h3>Deploy the Worker</h3>
+                            <p>In the Cloudflare dashboard, create a Worker, replace its code with the script and deploy it.</p>
+                        </li>
+                        <li>
+                            <h3>Connect your domain</h3>
+                            <p>Add your domain to the Worker as a Custom Domain. Your Notion Site is now available at your own address.</p>
+                        </li>
+                    </ol>
+                </div>
+            </section>
+
+            <section id="generator" class="section section-alt">
+                <div class="container">
+                    <h2>Generate your Worker script</h2>
+                    <p class="section-lead">
+                        The script is generated in your browser as you type. Your
+                        settings are not sent anywhere.
+                    </p>
+                    <div id="root" lang="en">
+                        <noscript>The generator needs JavaScript. Please enable it to create your Worker script.</noscript>
+                    </div>
+                </div>
+            </section>
+
+            <section id="faq" class="section">
+                <div class="container faq">
+                    <h2>Frequently asked questions</h2>
+                    <details>
+                        <summary><h3>Is Worknot free to use?</h3></summary>
+                        <p>Yes. Worknot is open source under the MIT License. You need a Cloudflare account to run the Worker. A first visit to a Notion Site makes roughly 700 Worker requests, so the Workers Free plan (100,000 requests per day) suits small sites. Use Workers Paid for sites with regular traffic.</p>
+                    </details>
+                    <details>
+                        <summary><h3>Do I need a paid Notion plan?</h3></summary>
+                        <p>No. Worknot works with any page you publish to the web with Notion Sites. It does not use Notion's own custom domain feature.</p>
+                    </details>
+                    <details>
+                        <summary><h3>What happens when Notion changes its client?</h3></summary>
+                        <p>A GitHub Actions workflow checks Notion's client code and renders a test site every day at 06:00 UTC, and opens an issue when something changes. When a fix is released, generate the script again here and redeploy your Worker.</p>
+                    </details>
+                    <details>
+                        <summary><h3>Does Worknot store my settings or content?</h3></summary>
+                        <p>No. The generator runs entirely in your browser and does not send your settings anywhere. Your site's traffic goes through the Worker in your own Cloudflare account.</p>
+                    </details>
+                    <details>
+                        <summary><h3>How is Worknot related to Fruition?</h3></summary>
+                        <p>Worknot started as a fork of <a href="https://fruitionsite.com/">Fruition</a> by Stephen Ou. Classmethod (Europe) GmbH maintains it and keeps it compatible with current Notion Sites.</p>
+                    </details>
+                </div>
+            </section>
+        </main>
+
+        <footer class="site-footer">
+            <div class="container footer-inner">
+                <a class="footer-logo" href="https://classmethod.de/">
+                    <img
+                        src="/brand/classmethod-europe-white.svg"
+                        alt="Classmethod Europe"
+                        width="171"
+                        height="68"
+                        loading="lazy"
+                    />
+                </a>
+                <nav class="footer-nav" aria-label="Footer">
+                    <a href="https://github.com/classmethod/worknot">GitHub</a>
+                    <a href="https://github.com/classmethod/worknot/issues">Report an issue</a>
+                    <a href="https://fruitionsite.com/">Fruition</a>
+                    <a href="https://classmethod.de/">Classmethod Europe</a>
+                </nav>
+                <p class="legal">
+                    &copy; Classmethod (Europe) GmbH. Worknot is released under the
+                    MIT License.
+                </p>
+            </div>
+        </footer>
+
         <script type="module" src="/src/index.tsx"></script>
     </body>
 </html>
