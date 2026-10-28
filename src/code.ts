@@ -1542,7 +1542,9 @@ ${
       const replaceState = window.history.replaceState;
       window.history.replaceState = function(state) {
         if (arguments[1] !== 'bypass' && (slugs.includes(getSlug()) || location.pathname === NOT_FOUND_PATH)) return;
-        return replaceState.apply(window.history, arguments);
+        const result = replaceState.apply(window.history, arguments);
+        applyMeta();
+        return result;
       };
       const pushState = window.history.pushState;
       window.history.pushState = function(state) {
