@@ -246,3 +246,67 @@ test('Content Signals add a group for all crawlers when the rules have none', as
   assert.equal(await robotsTxt({ robotsRules, contentSignals: { 'ai-train': 'no' } }),
     `User-agent: *\nContent-Signal: ai-train=no\n\nUser-agent: GPTBot\nDisallow: /${SITEMAP}`);
 });
+
+// Requests a page and returns the HTMLRewriter handlers the worker registers for it
+async function rewriteHandlers(t, path, config) {
+  const handlers = {};
+  globalThis.HTMLRewriter = class {
+    on(selector, handler) { handlers[selector] = handler; return this; }
+    transform(response) { return response; }
+  };
+  t.after(() => { delete globalThis.HTMLRewriter; });
+  t.mock.method(globalThis, 'fetch', async () => new Response('<html></html>', { headers: { 'Content-Type': 'text/html' } }));
+  await run(await loadWorker(config), new Request(`https://notes.example.com${path}`));
+  return handlers;
+}
+
+// What the head and meta handlers produce: appended <head> HTML, og:url, and the <title> text if set
+function rewrittenHead(handlers) {
+  const head = { appended: [], append(html) { head.appended.push(html); }, prepend() {} };
+  handlers.head.element(head);
+  const attributes = { property: 'og:url' };
+  handlers.meta.element({
+    getAttribute: (name) => attributes[name] ?? null,
+    setAttribute: (name, value) => { attributes[name] = value; },
+  });
+  const title = { tagName: 'title', text: null, getAttribute: () => null, setInnerContent: (text) => { title.text = text; } };
+  handlers.title.element(title);
+  return {
+    canonical: head.appended.find((html) => html.startsWith('<link rel="canonical"'))?.match(/href="([^"]*)"/)[1],
+    ogUrl: attributes.content,
+    ogImage: head.appended.find((html) => html.startsWith('<meta property="og:image" '))?.match(/content="([^"]*)"/)[1],
+    title: title.text,
+  };
+}
+
+const HOME_METADATA = {
+  pageMetadata: { '': { title: 'Home title' } },
+  ogImageGeneration: { enabled: true },
+};
+const UNMAPPED = '44444444444444444444444444444444';
+
+test('a page without a slug is canonical at its page ID, without home page metadata', async (t) => {
+  const head = rewrittenHead(await rewriteHandlers(t, `/Some-Page-${UNMAPPED}`, HOME_METADATA));
+  assert.deepEqual(head, {
+    canonical: `https://notes.example.com/${UNMAPPED}`,
+    ogUrl: `https://notes.example.com/${UNMAPPED}`,
+    ogImage: undefined,
+    title: null,
+  });
+});
+
+test('a mapped page opened by page ID is canonical at its slug', async (t) => {
+  const head = rewrittenHead(await rewriteHandlers(t, `/${OTHER}`, HOME_METADATA));
+  assert.equal(head.canonical, 'https://notes.example.com/chapter');
+  assert.equal(head.ogImage, 'https://notes.example.com/og-image/chapter');
+});
+
+test('the home page keeps its canonical URL and metadata', async (t) => {
+  const head = rewrittenHead(await rewriteHandlers(t, '/', HOME_METADATA));
+  assert.deepEqual(head, {
+    canonical: 'https://notes.example.com',
+    ogUrl: 'https://notes.example.com',
+    ogImage: 'https://notes.example.com/og-image/',
+    title: 'Home title',
+  });
+});
