@@ -45,9 +45,14 @@ export interface SocialPreviewOptions {
   locale?: string;
 }
 
+// Content Signals (https://contentsignals.org/), each set to "yes", "no" or left out
+export const CONTENT_SIGNALS = ["search", "ai-input", "ai-train"] as const;
+export type ContentSignal = (typeof CONTENT_SIGNALS)[number];
+
 export interface SeoOptions {
   aiAttribution?: string;
   robotsRules?: string;
+  contentSignals?: Partial<Record<ContentSignal, string>>;
 }
 
 export interface AnalyticsOptions {
@@ -169,6 +174,13 @@ function tpl(value: string | undefined): string {
   return "`" + escaped + "`";
 }
 
+// Format the set signals as a Content-Signal value, e.g. "search=yes, ai-train=no".
+function contentSignal(signals: SeoOptions["contentSignals"]): string {
+  return CONTENT_SIGNALS.filter((name) => signals?.[name] === "yes" || signals?.[name] === "no")
+    .map((name) => `${name}=${signals?.[name]}`)
+    .join(", ");
+}
+
 // Short content hash, used to version the worker's edge cache.
 function hash(text: string): string {
   let h = 0x811c9dc5;
@@ -269,9 +281,12 @@ ${slugs
    * Step 3.4: SEO configuration (optional)
    * AI attribution for proper citation in AI-generated content
    * robots.txt rules (the sitemap line is added automatically)
+   * Content Signals: how crawlers may use the content, e.g. "search=yes, ai-train=no"
+   * (https://contentsignals.org/)
    */
   const AI_ATTRIBUTION = ${str(seo?.aiAttribution)};
   const ROBOTS_RULES = ${tpl(seo?.robotsRules?.trim())};
+  const CONTENT_SIGNAL = ${str(contentSignal(seo?.contentSignals))};
 
   /*
    * Step 3.5: analytics configuration (optional)
@@ -504,6 +519,21 @@ ${
   function isAssetCacheable(response) {
     const cacheControl = response.headers.get('Cache-Control') || '';
     return cacheControl.includes('immutable') || /max-age=[1-9]/.test(cacheControl);
+  }
+
+  // Content Signals go into the group for all crawlers, which is added if the rules
+  // have none. A separate group could hide the rules from parsers that use the first match.
+  function generateRobotsTxt() {
+    let rules = ROBOTS_RULES || 'User-agent: *\\nAllow: /';
+    if (CONTENT_SIGNAL) {
+      const signal = 'Content-Signal: ' + CONTENT_SIGNAL;
+      // The "User-agent: *" line and any user-agent lines right after it
+      const allCrawlers = /^user-agent:[ \\t]*\\*[ \\t]*$(?:\\r?\\n^user-agent:.*$)*/im;
+      rules = allCrawlers.test(rules)
+        ? rules.replace(allCrawlers, (group) => group + '\\n' + signal)
+        : 'User-agent: *\\n' + signal + '\\n\\n' + rules;
+    }
+    return rules + '\\n\\nSitemap: https://' + MY_DOMAIN + '/sitemap.xml\\n';
   }
 
   function generateSitemap() {
@@ -883,7 +913,7 @@ ${
     // Use the original Notion site domain instead of www.notion.so
     url.hostname = NOTION_SITE_DOMAIN;
     if (url.pathname === '/robots.txt') {
-      return new Response((ROBOTS_RULES || 'User-agent: *\\nAllow: /') + '\\n\\nSitemap: https://' + MY_DOMAIN + '/sitemap.xml\\n');
+      return new Response(generateRobotsTxt());
     }
     if (url.pathname === '/sitemap.xml') {
       let response = new Response(generateSitemap());

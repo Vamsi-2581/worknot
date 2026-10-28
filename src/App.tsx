@@ -53,6 +53,7 @@ import code, {
   RssOptions,
   I18nOptions,
   OgImageGenerationOptions,
+  CONTENT_SIGNALS,
 } from "./code";
 
 const DEFAULT_DOMAIN = "www.example.com";
@@ -1136,6 +1137,41 @@ export default function App() {
               variant="outlined"
               size="small"
             />
+            <Stack direction="row" spacing={1}>
+              {CONTENT_SIGNALS.map((signal) => (
+                <FormControl key={signal} fullWidth size="small" margin="dense">
+                  <InputLabel id={`contentSignal-${signal}`}>{signal}</InputLabel>
+                  <Select
+                    labelId={`contentSignal-${signal}`}
+                    label={signal}
+                    value={seo.contentSignals?.[signal] ?? ""}
+                    onChange={(e) =>
+                      handleSeoChange("contentSignals", {
+                        ...seo.contentSignals,
+                        [signal]: e.target.value,
+                      })
+                    }
+                  >
+                    <MenuItem value="">Not set</MenuItem>
+                    <MenuItem value="yes">yes</MenuItem>
+                    <MenuItem value="no">no</MenuItem>
+                  </Select>
+                </FormControl>
+              ))}
+            </Stack>
+            <Typography variant="caption" color="textSecondary">
+              <Link
+                href="https://contentsignals.org/"
+                target="_blank"
+                rel="noreferrer"
+              >
+                Content Signals
+              </Link>{" "}
+              in robots.txt tell crawlers how they may use your content:
+              search results (search), AI answers (ai-input) and AI training
+              (ai-train). Compliance is voluntary; to block crawlers, use AI
+              Crawl Control in your Cloudflare dashboard.
+            </Typography>
           </Box>
 
           <Box sx={{ mt: 3, pt: 2, borderTop: 1, borderColor: "grey.300" }}>

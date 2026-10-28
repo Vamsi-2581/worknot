@@ -7,30 +7,30 @@ const ROOT = '11111111111111111111111111111111';
 const CHAPTER = '22222222222222222222222222222222';
 const OTHER = '33333333333333333333333333333333';
 const dashed = (id) => id.replace(/(.{8})(.{4})(.{4})(.{4})(.{12})/, '$1-$2-$3-$4-$5');
-let script;
+const CONFIG = {
+  myDomain: 'notes.example.com',
+  notionUrl: `https://source-workspace.notion.site/${ROOT}`,
+  slugs: [['chapter', `https://source-workspace.notion.site/${OTHER}`]],
+  pageTitle: '', pageDescription: '', googleFont: '', customScript: '', customCss: '',
+  optionImage: {}, pageMetadata: {}, structuredData: { enabled: false, schemaType: 'WebPage' },
+  branding: {}, socialPreview: {}, seo: {}, analytics: {}, caching: { enabled: false },
+  customHtml: {}, custom404: {}, subdomainRedirects: [], redirectRules: [],
+  rss: { enabled: false }, i18n: { enabled: false, defaultLocale: 'en' },
+  ogImageGeneration: { enabled: false },
+};
+let generate;
 let worker;
 let isolates = 0;
 // Each import is a separate module instance, like a new isolate
-async function loadWorker() {
-  const source = `${script}\n// isolate ${isolates++}`;
+async function loadWorker(config = {}) {
+  const source = `${generate({ ...CONFIG, ...config })}\n// isolate ${isolates++}`;
   return (await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`)).default;
 }
 
 before(async () => {
   const vite = await createServer({ configFile: false, server: { middlewareMode: true, ws: false }, appType: 'custom', logLevel: 'error' });
   try {
-    const { default: generate } = await vite.ssrLoadModule('/src/code.ts');
-    script = generate({
-      myDomain: 'notes.example.com',
-      notionUrl: `https://source-workspace.notion.site/${ROOT}`,
-      slugs: [['chapter', `https://source-workspace.notion.site/${OTHER}`]],
-      pageTitle: '', pageDescription: '', googleFont: '', customScript: '', customCss: '',
-      optionImage: {}, pageMetadata: {}, structuredData: { enabled: false, schemaType: 'WebPage' },
-      branding: {}, socialPreview: {}, seo: {}, analytics: {}, caching: { enabled: false },
-      customHtml: {}, custom404: {}, subdomainRedirects: [], redirectRules: [],
-      rss: { enabled: false }, i18n: { enabled: false, defaultLocale: 'en' },
-      ogImageGeneration: { enabled: false },
-    });
+    ({ default: generate } = await vite.ssrLoadModule('/src/code.ts'));
     worker = await loadWorker();
   } finally {
     await vite.close();
@@ -189,4 +189,33 @@ test('a failed foreign page check is not cached', async (t) => {
   }
   const checks = upstream.mock.calls.filter((call) => call.arguments[0].endsWith('/api/v3/getPublicPageData'));
   assert.equal(checks.length, 2);
+});
+
+async function robotsTxt(seo) {
+  const response = await run(await loadWorker({ seo }), new Request('https://notes.example.com/robots.txt'));
+  return response.text();
+}
+
+const SITEMAP = '\n\nSitemap: https://notes.example.com/sitemap.xml\n';
+
+test('robots.txt is unchanged without Content Signals', async () => {
+  assert.equal(await robotsTxt({}), `User-agent: *\nAllow: /${SITEMAP}`);
+});
+
+test('Content Signals keep a fixed order and skip unset or invalid values', async () => {
+  const signals = { 'ai-train': 'no', 'ai-input': 'maybe', search: 'yes' };
+  assert.equal(await robotsTxt({ contentSignals: signals }),
+    `User-agent: *\nContent-Signal: search=yes, ai-train=no\nAllow: /${SITEMAP}`);
+});
+
+test('Content Signals join the existing group for all crawlers', async () => {
+  const robotsRules = 'User-agent: GPTBot\nDisallow: /\n\nUser-agent: *\nUser-agent: Bingbot\nDisallow: /private';
+  assert.equal(await robotsTxt({ robotsRules, contentSignals: { 'ai-train': 'no' } }),
+    `User-agent: GPTBot\nDisallow: /\n\nUser-agent: *\nUser-agent: Bingbot\nContent-Signal: ai-train=no\nDisallow: /private${SITEMAP}`);
+});
+
+test('Content Signals add a group for all crawlers when the rules have none', async () => {
+  const robotsRules = 'User-agent: GPTBot\nDisallow: /';
+  assert.equal(await robotsTxt({ robotsRules, contentSignals: { 'ai-train': 'no' } }),
+    `User-agent: *\nContent-Signal: ai-train=no\n\nUser-agent: GPTBot\nDisallow: /${SITEMAP}`);
 });
