@@ -1085,19 +1085,25 @@ ${
       return notFoundResponse(url);
     }
 
-    // Get current slug from page ID for canonical URL
+    // A page without a slug is canonical at its page ID, so that it isn't
+    // taken for a duplicate of the home page (#190)
     const pageIdMatch = url.pathname.match(/[0-9a-f]{32}/);
     const pageId = pageIdMatch ? pageIdMatch[0] : '';
-    const currentSlug = PAGE_TO_SLUG[pageId] || '';
+    if (PAGE_TO_SLUG[pageId] !== undefined) {
+      return appendJavascript(response, SLUG_TO_PAGE, PAGE_TO_SLUG[pageId], url);
+    }
+    return appendJavascript(response, SLUG_TO_PAGE, null, url, pageId ? '/' + pageId : url.pathname);
+  }
 
-    return appendJavascript(response, SLUG_TO_PAGE, currentSlug, url);
+  // Per-page metadata (Issue #11); pages without a slug (null) have none
+  function pageMetadata(slug) {
+    return (slug !== null && PAGE_METADATA[slug]) || {};
   }
 
   class MetaRewriter {
-    constructor(slug) {
-      this.slug = slug;
-      // Get page-specific metadata or use defaults (Issue #11)
-      this.metadata = PAGE_METADATA[slug] || {};
+    constructor(slug, canonicalUrl) {
+      this.canonicalUrl = canonicalUrl;
+      this.metadata = pageMetadata(slug);
     }
     element(element) {
       const pageTitle = this.metadata.title || PAGE_TITLE;
@@ -1152,8 +1158,7 @@ ${
       // Set canonical URL for og:url and twitter:url (Issue #9)
       if (element.getAttribute('property') === 'og:url'
         || element.getAttribute('name') === 'twitter:url') {
-        const canonicalUrl = 'https://' + MY_DOMAIN + (this.slug ? '/' + this.slug : '');
-        element.setAttribute('content', canonicalUrl);
+        element.setAttribute('content', this.canonicalUrl);
       }
       if (element.getAttribute('name') === 'apple-itunes-app') {
         element.remove();
@@ -1195,10 +1200,10 @@ ${
   }
 
   class HeadRewriter {
-    constructor(slug) {
+    constructor(slug, canonicalUrl) {
       this.slug = slug;
-      // Get page-specific metadata or use defaults (Issue #11)
-      this.metadata = PAGE_METADATA[slug] || {};
+      this.canonicalUrl = canonicalUrl;
+      this.metadata = pageMetadata(slug);
     }
     element(element) {
       // Add custom <head> HTML first so it runs before Notion's scripts (Issue #147)
@@ -1206,7 +1211,7 @@ ${
         element.prepend(CUSTOM_HEAD, { html: true });
       }
       // Add canonical URL and robots meta tag for SEO (Issue #8 & #9)
-      const canonicalUrl = 'https://' + MY_DOMAIN + (this.slug ? '/' + this.slug : '');
+      const canonicalUrl = this.canonicalUrl;
       element.append(\`<link rel="canonical" href="\${escapeHtml(canonicalUrl)}">\`, { html: true });
       element.append(\`<meta name="robots" content="index, follow">\`, { html: true });
 
@@ -1269,8 +1274,9 @@ ${
         element.append(\`<meta property="og:locale" content="\${escapeHtml(OG_LOCALE)}">\`, { html: true });
       }
 
-      // Add auto-generated OG image if no custom image is set (Issue #36)
-      if (!effectiveOgImage && OG_IMAGE_GENERATION_ENABLED) {
+      // Add auto-generated OG image if no custom image is set (Issue #36).
+      // Images are only generated for pages with a slug.
+      if (!effectiveOgImage && OG_IMAGE_GENERATION_ENABLED && this.slug !== null) {
         const generatedUrl = \`https://\${MY_DOMAIN}/og-image/\${this.slug}\`;
         element.append(\`<meta property="og:image" content="\${escapeHtml(generatedUrl)}">\`, { html: true });
         element.append(\`<meta property="og:image:width" content="1200">\`, { html: true });
@@ -1444,8 +1450,9 @@ ${
       }
       function applyMeta() {
         const slug = location.pathname === NOT_FOUND_PATH ? '404'
-          : PAGE_TO_SLUG[getPage()] ?? (slugs.includes(getSlug()) ? getSlug() : '');
-        const page = META.pages[slug] || {};
+          : PAGE_TO_SLUG[getPage()] ?? (slugs.includes(getSlug()) ? getSlug() : null);
+        // Like on the server, pages without a slug get no per-page metadata
+        const page = (slug !== null && META.pages[slug]) || {};
         let title = page.title || META.title;
         if (!title && META.brand && document.title.endsWith(' | Notion')) {
           title = document.title.slice(0, -' | Notion'.length) + ' | ' + META.brand;
@@ -1648,9 +1655,11 @@ ${
     return appendJavascript(response, SLUG_TO_PAGE, '404', url);
   }
 
-  async function appendJavascript(res, SLUG_TO_PAGE, slug, url) {
-    const metaRewriter = new MetaRewriter(slug);
-    const headRewriter = new HeadRewriter(slug);
+  // slug is null for a page without one; path is then its canonical path
+  async function appendJavascript(res, SLUG_TO_PAGE, slug, url, path = slug ? '/' + slug : '') {
+    const canonicalUrl = 'https://' + MY_DOMAIN + path;
+    const metaRewriter = new MetaRewriter(slug, canonicalUrl);
+    const headRewriter = new HeadRewriter(slug, canonicalUrl);
     const linkRewriter = new LinkRewriter();
     const contentType = res.headers.get('content-type');
     let transformed = new HTMLRewriter()
