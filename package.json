@@ -30,6 +30,7 @@
     "wrangler": "^4.151.2"
   },
   "scripts": {
+    "test": "node --test test/*.test.mjs",
     "start": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
