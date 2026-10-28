@@ -1,0 +1,359 @@
+<!doctype html>
+<html lang="ja">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Notion Sites を独自ドメインで公開 | Worknot</title>
+        <meta
+            name="description"
+            content="Notion Sites で公開したページを独自ドメインで配信する Cloudflare Worker のスクリプトを生成します。読みやすい URL、SEO タグ、アナリティクスに対応した無料のオープンソースです。"
+        />
+        <meta name="author" content="Classmethod (Europe) GmbH" />
+        <meta name="robots" content="index, follow, max-image-preview:large" />
+        <meta name="theme-color" content="#ffffff" />
+        <link rel="canonical" href="https://worknot.classmethod.live/ja/" />
+        <link rel="alternate" hreflang="en" href="https://worknot.classmethod.live/" />
+        <link rel="alternate" hreflang="ja" href="https://worknot.classmethod.live/ja/" />
+        <link rel="alternate" hreflang="x-default" href="https://worknot.classmethod.live/" />
+
+        <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+        <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+
+        <link
+            rel="preload"
+            href="/fonts/ibm-plex-sans-latin.woff2"
+            as="font"
+            type="font/woff2"
+            crossorigin
+        />
+        <link rel="stylesheet" href="/src/styles.css" />
+
+        <meta property="og:type" content="website" />
+        <meta property="og:url" content="https://worknot.classmethod.live/ja/" />
+        <meta property="og:site_name" content="Worknot" />
+        <meta property="og:title" content="Worknot: Notion Sites を独自ドメインで公開" />
+        <meta
+            property="og:description"
+            content="Notion Sites のページを独自ドメインで配信する Cloudflare Worker を生成します。読みやすい URL、SEO タグ、アナリティクスに対応。無料のオープンソースです。"
+        />
+        <meta
+            property="og:image"
+            content="https://worknot.classmethod.live/og-image-ja.png"
+        />
+        <meta property="og:image:width" content="1200" />
+        <meta property="og:image:height" content="630" />
+        <meta
+            property="og:image:alt"
+            content="Worknot by Classmethod Europe: Notion Sites を独自ドメインで公開"
+        />
+        <meta property="og:locale" content="ja_JP" />
+        <meta property="og:locale:alternate" content="en_US" />
+
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content="Worknot: Notion Sites を独自ドメインで公開" />
+        <meta
+            name="twitter:description"
+            content="Notion Sites のページを独自ドメインで配信する Cloudflare Worker を生成します。読みやすい URL、SEO タグ、アナリティクスに対応。無料のオープンソースです。"
+        />
+        <meta
+            name="twitter:image"
+            content="https://worknot.classmethod.live/og-image-ja.png"
+        />
+        <meta
+            name="twitter:image:alt"
+            content="Worknot by Classmethod Europe: Notion Sites を独自ドメインで公開"
+        />
+
+        <script type="application/ld+json">
+            {
+                "@context": "https://schema.org",
+                "@graph": [
+                    {
+                        "@type": "Organization",
+                        "@id": "https://classmethod.de/#organization",
+                        "name": "Classmethod (Europe) GmbH",
+                        "url": "https://classmethod.de/",
+                        "logo": "https://worknot.classmethod.live/brand/classmethod-europe-black.svg"
+                    },
+                    {
+                        "@type": "WebSite",
+                        "@id": "https://worknot.classmethod.live/#website",
+                        "name": "Worknot",
+                        "url": "https://worknot.classmethod.live/",
+                        "inLanguage": ["en", "ja"],
+                        "publisher": { "@id": "https://classmethod.de/#organization" }
+                    },
+                    {
+                        "@type": "WebApplication",
+                        "name": "Worknot",
+                        "url": "https://worknot.classmethod.live/ja/",
+                        "description": "Notion Sites のページを独自ドメインで配信する Cloudflare Worker のスクリプトを生成します。読みやすい URL、SEO メタデータ、アナリティクス、画像の最適化に対応しています。",
+                        "inLanguage": "ja",
+                        "applicationCategory": "DeveloperApplication",
+                        "operatingSystem": "Any",
+                        "browserRequirements": "Requires JavaScript",
+                        "isAccessibleForFree": true,
+                        "license": "https://opensource.org/license/mit",
+                        "offers": { "@type": "Offer", "price": "0", "priceCurrency": "EUR" },
+                        "publisher": { "@id": "https://classmethod.de/#organization" },
+                        "sameAs": "https://github.com/classmethod/worknot"
+                    },
+                    {
+                        "@type": "FAQPage",
+                        "inLanguage": "ja",
+                        "mainEntity": [
+                            {
+                                "@type": "Question",
+                                "name": "Worknot は無料で使えますか？",
+                                "acceptedAnswer": {
+                                    "@type": "Answer",
+                                    "text": "はい。Worknot は MIT ライセンスのオープンソースです。Worker を動かすには Cloudflare のアカウントが必要です。Notion Sites のページを初めて開くと Worker へのリクエストが約 700 件発生するため、Workers Free プラン（1 日 100,000 リクエスト）は小規模なサイト向けです。継続的にアクセスがあるサイトでは Workers Paid をお使いください。"
+                                }
+                            },
+                            {
+                                "@type": "Question",
+                                "name": "Notion の有料プランは必要ですか？",
+                                "acceptedAnswer": {
+                                    "@type": "Answer",
+                                    "text": "いいえ。Notion Sites で Web に公開したページであれば利用できます。Notion の独自ドメイン機能は使用しません。"
+                                }
+                            },
+                            {
+                                "@type": "Question",
+                                "name": "Notion のクライアントが変更されたらどうなりますか？",
+                                "acceptedAnswer": {
+                                    "@type": "Answer",
+                                    "text": "GitHub Actions のワークフローが毎日 06:00 UTC に Notion のクライアントコードのチェックとテストサイトの表示確認を行い、変更を検出すると Issue を作成します。修正がリリースされたら、このページでスクリプトを生成し直し、Worker を再デプロイしてください。"
+                                }
+                            },
+                            {
+                                "@type": "Question",
+                                "name": "Worknot は設定やコンテンツを保存しますか？",
+                                "acceptedAnswer": {
+                                    "@type": "Answer",
+                                    "text": "いいえ。ジェネレーターはすべてブラウザー内で動作し、設定内容をどこにも送信しません。サイトへのアクセスは、お使いの Cloudflare アカウントの Worker を経由します。"
+                                }
+                            },
+                            {
+                                "@type": "Question",
+                                "name": "Worknot と Fruition の関係は？",
+                                "acceptedAnswer": {
+                                    "@type": "Answer",
+                                    "text": "Worknot は Stephen Ou 氏が開発した Fruition のフォークとして始まりました。現在は Classmethod (Europe) GmbH がメンテナンスし、最新の Notion Sites に対応させています。"
+                                }
+                            }
+                        ]
+                    }
+                ]
+            }
+        </script>
+    </head>
+
+    <body>
+        <a class="skip-link" href="#generator">ジェネレーターへ移動</a>
+
+        <header class="site-header">
+            <div class="container header-inner">
+                <div class="brand">
+                    <a class="brand-logo" href="https://classmethod.de/">
+                        <img
+                            src="/brand/classmethod-europe-black.svg"
+                            alt="Classmethod Europe"
+                            width="171"
+                            height="68"
+                        />
+                    </a>
+                    <span class="brand-divider" aria-hidden="true"></span>
+                    <a class="product-name" href="/ja/">Worknot</a>
+                </div>
+                <nav class="site-nav" aria-label="メイン">
+                    <a class="nav-link" href="#features">機能</a>
+                    <a class="nav-link" href="#how-it-works">使い方</a>
+                    <a class="nav-link" href="#faq">よくある質問</a>
+                    <a class="nav-link" href="https://github.com/classmethod/worknot">GitHub</a>
+                    <a class="lang-switch" href="/" hreflang="en" lang="en">English</a>
+                    <a class="button button-primary button-small" href="#generator">スクリプトを生成</a>
+                </nav>
+            </div>
+        </header>
+
+        <main>
+            <section class="hero">
+                <div class="container hero-grid">
+                    <div>
+                        <p class="eyebrow">無料・オープンソース</p>
+                        <h1>Notion Sites を独自ドメインで公開</h1>
+                        <p class="lead">
+                            Worknot は、Notion Sites で公開したページを独自ドメインで配信する
+                            Cloudflare Worker のスクリプトを生成します。読みやすい URL、SEO
+                            メタデータ、アナリティクスにも対応しています。
+                        </p>
+                        <div class="actions">
+                            <a class="button button-primary" href="#generator">Worker スクリプトを生成</a>
+                            <a class="button button-secondary" href="https://github.com/classmethod/worknot">GitHub でソースを見る</a>
+                        </div>
+                        <ul class="facts">
+                            <li>MIT ライセンス</li>
+                            <li>お使いの Cloudflare アカウントで動作</li>
+                            <li>Notion の変更を毎日チェック</li>
+                        </ul>
+                    </div>
+
+                    <figure class="flow">
+                        <div class="flow-node">
+                            <p class="flow-label">訪問者が開く URL</p>
+                            <p class="flow-url">https://www.example.com/about</p>
+                        </div>
+                        <div class="flow-connector" aria-hidden="true"></div>
+                        <div class="flow-node is-worker">
+                            <p class="flow-label">Worknot が生成する Cloudflare Worker</p>
+                            <ul class="tags">
+                                <li>読みやすい URL</li>
+                                <li>SEO タグ</li>
+                                <li>アナリティクス</li>
+                                <li>画像の最適化</li>
+                            </ul>
+                        </div>
+                        <div class="flow-connector" aria-hidden="true"></div>
+                        <div class="flow-node">
+                            <p class="flow-label">Notion Sites のページ</p>
+                            <p class="flow-url">https://example.notion.site/About-1a2b3c</p>
+                        </div>
+                        <figcaption>
+                            独自ドメインへのリクエストは Worker を経由します。Worker が Notion
+                            Sites からページを取得し、お使いのドメインで配信します。
+                        </figcaption>
+                    </figure>
+                </div>
+            </section>
+
+            <section id="features" class="section section-alt">
+                <div class="container">
+                    <h2>Worknot でできること</h2>
+                    <p class="section-lead">
+                        各機能は下のジェネレーターで設定できます。Worknot は、Cloudflare と
+                        Notion のパートナーである
+                        <a href="https://classmethod.de/">Classmethod (Europe) GmbH</a>
+                        がメンテナンスしています。
+                    </p>
+                    <div class="feature-grid">
+                        <article class="feature">
+                            <h3>独自ドメインと読みやすい URL</h3>
+                            <p>Notion Sites のページを独自ドメインで配信し、/about や /blog のような読みやすいパスに割り当てられます。</p>
+                        </article>
+                        <article class="feature">
+                            <h3>SEO メタデータ</h3>
+                            <p>ページタイトル、説明文、Open Graph タグ、JSON-LD、hreflang、sitemap.xml、RSS フィードを設定できます。</p>
+                        </article>
+                        <article class="feature">
+                            <h3>アナリティクス</h3>
+                            <p>Notion のページを変更せずに、Google Analytics 4 や Facebook Pixel を追加できます。</p>
+                        </article>
+                        <article class="feature">
+                            <h3>画像の最適化</h3>
+                            <p>Cloudflare Image Transformations で、Notion の画像をエッジでリサイズ、変換、圧縮します。</p>
+                        </article>
+                        <article class="feature">
+                            <h3>ブランディングとカスタムコード</h3>
+                            <p>カスタム CSS と JavaScript、Google Fonts のフォント、ファビコン、ヘッダー HTML、カスタム 404 ページを追加できます。</p>
+                        </article>
+                        <article class="feature">
+                            <h3>毎日の互換性チェック</h3>
+                            <p>毎日 06:00 UTC に Notion のクライアントコードを自動でチェックし、変更があれば GitHub に Issue を作成します。</p>
+                        </article>
+                    </div>
+                </div>
+            </section>
+
+            <section id="how-it-works" class="section">
+                <div class="container">
+                    <h2>使い方</h2>
+                    <p class="section-lead">
+                        Notion Sites で公開したページと、DNS を Cloudflare で管理しているドメインが必要です。
+                    </p>
+                    <ol class="steps">
+                        <li>
+                            <h3>ページを公開する</h3>
+                            <p>Notion で「共有」を開いて「公開」を選び、ページの notion.site の URL をコピーします。</p>
+                        </li>
+                        <li>
+                            <h3>スクリプトを生成する</h3>
+                            <p>下のフォームにドメインと Notion の URL を入力し、必要に応じて Pretty Link やオプションを設定して、スクリプトをコピーします。</p>
+                        </li>
+                        <li>
+                            <h3>Worker をデプロイする</h3>
+                            <p>Cloudflare のダッシュボードで Worker を作成し、コードをスクリプトに置き換えてデプロイします。</p>
+                        </li>
+                        <li>
+                            <h3>ドメインを接続する</h3>
+                            <p>Worker にドメインをカスタムドメインとして追加します。これで Notion Sites のページが独自ドメインで表示されます。</p>
+                        </li>
+                    </ol>
+                </div>
+            </section>
+
+            <section id="generator" class="section section-alt">
+                <div class="container">
+                    <h2>Worker スクリプトを生成</h2>
+                    <p class="section-lead">
+                        スクリプトは入力に合わせてブラウザー内で生成され、設定内容はどこにも送信されません。フォームは英語表記です。
+                    </p>
+                    <div id="root" lang="en">
+                        <noscript>ジェネレーターを使うには JavaScript を有効にしてください。</noscript>
+                    </div>
+                </div>
+            </section>
+
+            <section id="faq" class="section">
+                <div class="container faq">
+                    <h2>よくある質問</h2>
+                    <details>
+                        <summary><h3>Worknot は無料で使えますか？</h3></summary>
+                        <p>はい。Worknot は MIT ライセンスのオープンソースです。Worker を動かすには Cloudflare のアカウントが必要です。Notion Sites のページを初めて開くと Worker へのリクエストが約 700 件発生するため、Workers Free プラン（1 日 100,000 リクエスト）は小規模なサイト向けです。継続的にアクセスがあるサイトでは Workers Paid をお使いください。</p>
+                    </details>
+                    <details>
+                        <summary><h3>Notion の有料プランは必要ですか？</h3></summary>
+                        <p>いいえ。Notion Sites で Web に公開したページであれば利用できます。Notion の独自ドメイン機能は使用しません。</p>
+                    </details>
+                    <details>
+                        <summary><h3>Notion のクライアントが変更されたらどうなりますか？</h3></summary>
+                        <p>GitHub Actions のワークフローが毎日 06:00 UTC に Notion のクライアントコードのチェックとテストサイトの表示確認を行い、変更を検出すると Issue を作成します。修正がリリースされたら、このページでスクリプトを生成し直し、Worker を再デプロイしてください。</p>
+                    </details>
+                    <details>
+                        <summary><h3>Worknot は設定やコンテンツを保存しますか？</h3></summary>
+                        <p>いいえ。ジェネレーターはすべてブラウザー内で動作し、設定内容をどこにも送信しません。サイトへのアクセスは、お使いの Cloudflare アカウントの Worker を経由します。</p>
+                    </details>
+                    <details>
+                        <summary><h3>Worknot と Fruition の関係は？</h3></summary>
+                        <p>Worknot は Stephen Ou 氏が開発した <a href="https://fruitionsite.com/">Fruition</a> のフォークとして始まりました。現在は Classmethod (Europe) GmbH がメンテナンスし、最新の Notion Sites に対応させています。</p>
+                    </details>
+                </div>
+            </section>
+        </main>
+
+        <footer class="site-footer">
+            <div class="container footer-inner">
+                <a class="footer-logo" href="https://classmethod.de/">
+                    <img
+                        src="/brand/classmethod-europe-white.svg"
+                        alt="Classmethod Europe"
+                        width="171"
+                        height="68"
+                        loading="lazy"
+                    />
+                </a>
+                <nav class="footer-nav" aria-label="フッター">
+                    <a href="https://github.com/classmethod/worknot">GitHub</a>
+                    <a href="https://github.com/classmethod/worknot/issues">不具合を報告</a>
+                    <a href="https://fruitionsite.com/">Fruition</a>
+                    <a href="https://classmethod.de/">Classmethod Europe</a>
+                </nav>
+                <p class="legal">
+                    &copy; Classmethod (Europe) GmbH. Worknot は MIT ライセンスで公開されています。
+                </p>
+            </div>
+        </footer>
+
+        <script type="module" src="/src/index.tsx"></script>
+    </body>
+</html>

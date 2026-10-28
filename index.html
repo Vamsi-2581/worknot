@@ -12,6 +12,9 @@
         <meta name="robots" content="index, follow, max-image-preview:large" />
         <meta name="theme-color" content="#ffffff" />
         <link rel="canonical" href="https://worknot.classmethod.live/" />
+        <link rel="alternate" hreflang="en" href="https://worknot.classmethod.live/" />
+        <link rel="alternate" hreflang="ja" href="https://worknot.classmethod.live/ja/" />
+        <link rel="alternate" hreflang="x-default" href="https://worknot.classmethod.live/" />
 
         <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
         <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
@@ -47,6 +50,7 @@
             content="Worknot by Classmethod Europe: host your Notion Site on your own domain"
         />
         <meta property="og:locale" content="en_US" />
+        <meta property="og:locale:alternate" content="ja_JP" />
 
         <meta name="twitter:card" content="summary_large_image" />
         <meta
@@ -82,7 +86,7 @@
                         "@id": "https://worknot.classmethod.live/#website",
                         "name": "Worknot",
                         "url": "https://worknot.classmethod.live/",
-                        "inLanguage": "en",
+                        "inLanguage": ["en", "ja"],
                         "publisher": { "@id": "https://classmethod.de/#organization" }
                     },
                     {
@@ -90,6 +94,7 @@
                         "name": "Worknot",
                         "url": "https://worknot.classmethod.live/",
                         "description": "Generates a Cloudflare Worker script that serves a Notion Site on a custom domain, with pretty URLs, SEO metadata, analytics and image optimization.",
+                        "inLanguage": "en",
                         "applicationCategory": "DeveloperApplication",
                         "operatingSystem": "Any",
                         "browserRequirements": "Requires JavaScript",
@@ -101,6 +106,7 @@
                     },
                     {
                         "@type": "FAQPage",
+                        "inLanguage": "en",
                         "mainEntity": [
                             {
                                 "@type": "Question",
@@ -171,6 +177,7 @@
                     <a class="nav-link" href="#how-it-works">How it works</a>
                     <a class="nav-link" href="#faq">FAQ</a>
                     <a class="nav-link" href="https://github.com/classmethod/worknot">GitHub</a>
+                    <a class="lang-switch" href="/ja/" hreflang="ja" lang="ja">日本語</a>
                     <a class="button button-primary button-small" href="#generator">Generate script</a>
                 </nav>
             </div>
@@ -299,7 +306,7 @@
                         The script is generated in your browser as you type. Your
                         settings are not sent anywhere.
                     </p>
-                    <div id="root">
+                    <div id="root" lang="en">
                         <noscript>The generator needs JavaScript. Please enable it to create your Worker script.</noscript>
                     </div>
                 </div>

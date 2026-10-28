@@ -45,6 +45,25 @@ body {
     -moz-osx-font-smoothing: grayscale;
 }
 
+body:lang(ja) {
+    font-family:
+        "Noto Sans JP",
+        "Hiragino Sans",
+        "Hiragino Kaku Gothic ProN",
+        Meiryo,
+        sans-serif;
+    line-height: 1.8;
+}
+
+:lang(ja) :is(h1, h2, h3) {
+    word-break: auto-phrase;
+}
+
+:lang(ja) :is(.eyebrow, .flow-label) {
+    letter-spacing: 0.02em;
+    text-transform: none;
+}
+
 h1,
 h2,
 h3,
@@ -155,6 +174,21 @@ a:hover {
 
 .site-nav .nav-link:hover {
     color: var(--blue-strong);
+}
+
+.lang-switch {
+    padding: 4px 12px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: var(--ink);
+    text-decoration: none;
+    white-space: nowrap;
+}
+
+.lang-switch:hover {
+    border-color: var(--blue-strong);
 }
 
 /* Buttons */
@@ -512,7 +546,16 @@ a:hover {
 }
 
 @media (max-width: 600px) {
-    .site-nav {
+    .header-inner,
+    .brand {
+        gap: 12px;
+    }
+
+    .product-name {
+        font-size: 1.1rem;
+    }
+
+    .site-nav .button {
         display: none;
     }
 
