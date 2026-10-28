@@ -2,12 +2,12 @@
   "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "worknot",
   "account_id": "172411ba14a3cd8e6dce641de0152c07",
-  "compatibility_date": "2026-03-11",
+  "compatibility_date": "2026-10-28",
   "observability": {
     "enabled": true
   },
   "assets": {
     "directory": "./build",
-    "not_found_handling": "single-page-application"
+    "not_found_handling": "404-page"
   }
 }
