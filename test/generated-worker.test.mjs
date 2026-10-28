@@ -406,4 +406,11 @@ test('client metadata preserves canonical URLs after Notion changes the head and
   assert.equal(page.tags.canonical.getAttribute('href'), expectedUnmapped);
   assert.equal(page.tags.ogUrl.getAttribute('content'), expectedUnmapped);
   assert.equal(page.tags.twitterUrl.getAttribute('content'), expectedUnmapped);
+
+  // replaceState is also used by the client router and must refresh route metadata.
+  page.window.history.replaceState({}, '', '/' + OTHER);
+  const expectedMapped = 'https://notes.example.com/chapter';
+  assert.equal(page.tags.canonical.getAttribute('href'), expectedMapped);
+  assert.equal(page.tags.ogUrl.getAttribute('content'), expectedMapped);
+  assert.equal(page.tags.twitterUrl.getAttribute('content'), expectedMapped);
 });
