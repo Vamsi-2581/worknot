@@ -1448,6 +1448,17 @@ ${
         const tag = document.querySelector(selector);
         if (tag && value && tag.getAttribute('content') !== value) tag.setAttribute('content', value);
       }
+      function getCanonicalUrl() {
+        const pageId = getPage() || SLUG_TO_PAGE[getSlug()];
+        if (pageId) {
+          const slug = PAGE_TO_SLUG[pageId];
+          const path = slug === undefined ? '/' + pageId : (slug ? '/' + slug : '');
+          return 'https://' + MY_DOMAIN + path;
+        }
+        const isNotFound = NOT_FOUND_PATH !== null && location.pathname === NOT_FOUND_PATH;
+        return 'https://' + MY_DOMAIN + (isNotFound ? '/404' : '');
+      }
+
       function applyMeta() {
         const slug = location.pathname === NOT_FOUND_PATH ? '404'
           : PAGE_TO_SLUG[getPage()] ?? (slugs.includes(getSlug()) ? getSlug() : null);
@@ -1464,14 +1475,22 @@ ${
         setContent('meta[name="description"]', description);
         setContent('meta[property="og:description"]', description);
         setContent('meta[name="twitter:description"]', description);
+        const canonicalUrl = getCanonicalUrl();
+        const canonical = document.querySelector('link[rel="canonical"]');
+        if (canonical && canonical.getAttribute('href') !== canonicalUrl) {
+          canonical.setAttribute('href', canonicalUrl);
+        }
+        setContent('meta[property="og:url"]', canonicalUrl);
+        setContent('meta[name="twitter:url"]', canonicalUrl);
       }
       new MutationObserver(applyMeta).observe(document.head, {
         subtree: true,
         childList: true,
         characterData: true,
         attributes: true,
-        attributeFilter: ['content'],
+        attributeFilter: ['content', 'href'],
       });
+      applyMeta();
       const observer = new MutationObserver(function() {
         if (redirected) return;
         const nav = document.querySelector('.notion-topbar');
@@ -1480,6 +1499,7 @@ ${
           || mobileNav && mobileNav.firstChild) {
           redirected = true;
           updateSlug();
+          applyMeta();
           // Notion only exposes ThemeStore via __console in debug sessions
           if (window.__console?.environment?.ThemeStore) addDarkModeButton(nav ? 'web' : 'mobile');
           const onpopstate = window.onpopstate;
@@ -1492,6 +1512,7 @@ ${
             }
             if (onpopstate) onpopstate.apply(this, [].slice.call(arguments));
             updateSlug();
+          applyMeta();
           };
         }
       });
@@ -1503,6 +1524,7 @@ ${
         if (!redirected) {
           redirected = true;
           updateSlug();
+          applyMeta();
           const onpopstate = window.onpopstate;
           window.onpopstate = function() {
             if (slugs.includes(getSlug())) {
@@ -1513,6 +1535,7 @@ ${
             }
             if (onpopstate) onpopstate.apply(this, [].slice.call(arguments));
             updateSlug();
+          applyMeta();
           };
         }
       }, 2000);
@@ -1529,7 +1552,9 @@ ${
         if (id && pages.includes(id)) {
           arguments[2] = '/' + PAGE_TO_SLUG[id];
         }
-        return pushState.apply(window.history, arguments);
+        const result = pushState.apply(window.history, arguments);
+        applyMeta();
+        return result;
       };
       const open = window.XMLHttpRequest.prototype.open;
       window.XMLHttpRequest.prototype.open = function() {
