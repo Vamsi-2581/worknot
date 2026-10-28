@@ -795,6 +795,24 @@ ${
     'accept-language': 'en-US,en;q=0.9'
   };
 
+  // Notion answers bot-like user agents with a server-rendered page that has the
+  // content as plain HTML. The visitor's user agent is not forwarded, because
+  // Notion rejects Googlebot or Bingbot requests that come from a Worker.
+  const CRAWLER_FETCH_HEADERS = {
+    ...PAGE_FETCH_HEADERS,
+    'user-agent': 'Mozilla/5.0 (compatible; WorknotBot/1.0; +https://worknot.classmethod.live/)'
+  };
+
+  // The server-rendered page has no Notion app, so people must never get it:
+  // "bot" also matches CUBOT phones, which are excluded.
+  const CRAWLER_USER_AGENT = /bot\\b|crawler|spider|chatgpt-user|claude-user|perplexity-user|meta-externalagent/i;
+
+  function isCrawler(request) {
+    const userAgent = request.headers.get('User-Agent') || '';
+    return (CRAWLER_USER_AGENT.test(userAgent) && !/cubot/i.test(userAgent))
+      || (request.headers.get('Accept') || '').includes('text/markdown');
+  }
+
   // Forward Notion routing headers (e.g. x-notion-cell for fanout requests).
   // Without them Notion keeps answering with fanoutData and pages render as 404.
   function buildApiHeaders(request) {
@@ -916,6 +934,7 @@ ${
       return notFoundResponse(url, true);
     }
     let response;
+    const pageFetchHeaders = isCrawler(request) ? CRAWLER_FETCH_HEADERS : PAGE_FETCH_HEADERS;
     const matchedSlug = pathToSlug(url.pathname);
     const isAppJs = url.pathname.startsWith('/app') && url.pathname.endsWith('js');
     const isAssetJs = url.pathname.startsWith('/_assets/') && url.pathname.endsWith('.js');
@@ -1009,7 +1028,7 @@ ${
       const pageId = SLUG_TO_PAGE[matchedSlug];
       url.pathname = '/' + pageId;
       response = await fetch(url.toString(), {
-        headers: PAGE_FETCH_HEADERS,
+        headers: pageFetchHeaders,
       });
       response = new Response(response.body, response);
       response.headers.delete('Content-Security-Policy');
@@ -1017,7 +1036,7 @@ ${
       return appendJavascript(response, SLUG_TO_PAGE, matchedSlug, url);
     } else {
       response = await fetch(url.toString(), {
-        headers: PAGE_FETCH_HEADERS,
+        headers: pageFetchHeaders,
       });
       // HTMLRewriter parses any body regardless of Content-Type, so stream
       // non-HTML responses (CSS, images, files) through untouched
@@ -1114,13 +1133,34 @@ ${
 
   class LinkRewriter {
     element(element) {
-      // Remove Notion's default favicon links when custom favicon is set (Issue #16)
-      if (FAVICON_URL !== '') {
-        const rel = element.getAttribute('rel');
-        if (rel && (rel.includes('icon') || rel === 'apple-touch-icon')) {
-          element.remove();
-        }
+      const rel = element.getAttribute('rel');
+      // The server-rendered page names its notion.site URL as canonical; HeadRewriter adds ours
+      if (rel === 'canonical') {
+        element.remove();
+        return;
       }
+      // Remove Notion's default favicon links when custom favicon is set (Issue #16)
+      if (FAVICON_URL !== '' && rel && (rel.includes('icon') || rel === 'apple-touch-icon')) {
+        element.remove();
+      }
+    }
+  }
+
+  // Links in the server-rendered page point to notion.site. Keep them on this
+  // domain, with the slug for mapped pages.
+  class AnchorRewriter {
+    element(element) {
+      let link;
+      try {
+        link = new URL(element.getAttribute('href'));
+      } catch (e) {
+        return;
+      }
+      if (link.hostname !== NOTION_SITE_DOMAIN) return;
+      link.hostname = MY_DOMAIN;
+      const pageId = link.pathname.match(/[0-9a-f]{32}$/)?.[0];
+      if (pageId && PAGE_TO_SLUG[pageId] !== undefined) link.pathname = '/' + PAGE_TO_SLUG[pageId];
+      element.setAttribute('href', link.toString());
     }
   }
 
@@ -1587,6 +1627,7 @@ ${
       .on('title', metaRewriter)
       .on('meta', metaRewriter)
       .on('link', linkRewriter)
+      .on('a[href]', new AnchorRewriter())
       .on('head', headRewriter)
       .on('body', new BodyRewriter(SLUG_TO_PAGE, res.status === 404))
       .transform(res);

@@ -23,16 +23,20 @@ const PORT = Number(process.env.PORT || 8799);
 const RUNS = Number(process.env.RUNS || 2);
 
 const DB_VIEWS = ["table", "board", "gallery", "list", "calendar", "timeline"];
+const CRAWLER = "Mozilla/5.0 (compatible; GPTBot/1.2; +https://openai.com/gptbot)";
 
 const TARGETS = {
   worker: {
     origin: `https://${DOMAIN}`,
+    // For requests outside the browser, which bypass its routing to wrangler
+    direct: `https://127.0.0.1:${PORT}`,
     root: "/",
     isRoot: (p) => p === "/",
     isSubpage: (p) => p === "/subpage",
   },
   notion: {
     origin: NOTION_SITE,
+    direct: NOTION_SITE,
     root: `/${ROOT_PAGE}`,
     isRoot: (p) => p.endsWith(ROOT_PAGE),
     isSubpage: (p) => p.endsWith(SUBPAGE),
@@ -233,6 +237,19 @@ const CHECKS = {
     s = await state(page);
     return target.isSubpage(s.path) && s.h1 === "Render Check Subpage" ? null : `after forward: ${s.path} "${s.h1}"`;
   },
+  // Crawlers get the server-rendered page, with the canonical URL and links on this site
+  "crawler content": async ({ context, target }) => {
+    const response = await context.request.get(target.direct + target.root, { headers: { "user-agent": CRAWLER } });
+    const html = await response.text();
+    if (!html.includes("Test page for Worknot")) return "page text missing";
+    const host = new URL(target.origin).host;
+    const canonical = [...html.matchAll(/<link rel="canonical" href="([^"]+)"/g)].map((m) => new URL(m[1]).host);
+    if (canonical.length !== 1 || canonical[0] !== host) return `canonical: ${canonical.join(", ") || "none"}`;
+    const offsite = [...html.matchAll(/<a [^>]*href="(https:\/\/[^"]+\.notion\.site\/[^"]*)"/g)]
+      .map((m) => m[1])
+      .find((href) => new URL(href).host !== host);
+    return offsite ? `links to notion.site: ${offsite}` : null;
+  },
   "no errors": async ({ errors, failures }) => {
     const problems = [...errors, ...failures];
     return problems.length ? problems.slice(0, 5).join("; ") : null;
@@ -240,7 +257,7 @@ const CHECKS = {
 };
 
 const GROUPS = [
-  ["page renders", "database views", "database rows and formula", "images load", "pdf and file blocks", "mermaid diagram", "embeds and bookmarks", "anchor link", "no errors"],
+  ["page renders", "database views", "database rows and formula", "images load", "pdf and file blocks", "mermaid diagram", "embeds and bookmarks", "anchor link", "crawler content", "no errors"],
   // Checks that navigate run on a page of their own
   ["database item stays on domain"],
   ["navigation and history"],

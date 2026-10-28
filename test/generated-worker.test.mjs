@@ -136,6 +136,33 @@ test('malformed JSON passes through without fabricated site context', async (t) 
   assert.equal(forwarded.body, '{invalid');
 });
 
+// Returns the user agent the worker sends to Notion for a page request
+async function pageFetchUserAgent(t, headers) {
+  globalThis.HTMLRewriter = class { on() { return this; } transform(response) { return response; } };
+  t.after(() => { delete globalThis.HTMLRewriter; });
+  const upstream = t.mock.method(globalThis, 'fetch', async () => new Response('<html></html>', {
+    headers: { 'Content-Type': 'text/html' },
+  }));
+  await run(worker, new Request('https://notes.example.com/chapter', { headers }));
+  return new Headers(upstream.mock.calls[0].arguments[1].headers).get('user-agent');
+}
+
+const WORKNOT_BOT = 'Mozilla/5.0 (compatible; WorknotBot/1.0; +https://worknot.classmethod.live/)';
+const CHROME = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36';
+
+for (const [visitor, headers, expected] of [
+  ['GPTBot', { 'User-Agent': 'Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko; compatible; GPTBot/1.2; +https://openai.com/gptbot)' }, WORKNOT_BOT],
+  ['ChatGPT-User', { 'User-Agent': 'Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko); compatible; ChatGPT-User/1.0; +https://openai.com/bot' }, WORKNOT_BOT],
+  ['Googlebot', { 'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)' }, WORKNOT_BOT],
+  ['an agent asking for Markdown', { 'User-Agent': 'curl/8.7.1', Accept: 'text/markdown' }, WORKNOT_BOT],
+  ['a browser', { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36' }, CHROME],
+  ['a CUBOT phone', { 'User-Agent': 'Mozilla/5.0 (Linux; Android 10; CUBOT X30) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Mobile Safari/537.36' }, CHROME],
+]) {
+  test(`pages for ${visitor} are fetched as ${expected === WORKNOT_BOT ? 'a crawler' : 'a browser'}`, async (t) => {
+    assert.equal(await pageFetchUserAgent(t, headers), expected);
+  });
+}
+
 test('cross-origin preflight requests get no CORS headers', async (t) => {
   const upstream = t.mock.method(globalThis, 'fetch', async () => new Response());
   const response = await run(worker, new Request('https://notes.example.com/api/v3/getPublicPageData', {
