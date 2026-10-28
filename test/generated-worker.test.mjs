@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { runInNewContext } from 'node:vm';
 import { before, test } from 'node:test';
 import { gzipSync } from 'node:zlib';
 import { createServer } from 'vite';
@@ -309,4 +310,100 @@ test('the home page keeps its canonical URL and metadata', async (t) => {
     ogImage: 'https://notes.example.com/og-image/',
     title: 'Home title',
   });
+});
+
+
+function fakeTag(initialAttributes) {
+  const attributes = { ...initialAttributes };
+  return {
+    getAttribute: (name) => attributes[name] ?? null,
+    setAttribute: (name, value) => { attributes[name] = value; },
+  };
+}
+
+async function runClientMetadata(t, path) {
+  const handlers = await rewriteHandlers(t, path, HOME_METADATA);
+  const appended = [];
+  handlers.body.element({ append: (html) => appended.push(html) });
+  const script = appended.join('').match(/<script>([\s\S]*?)<\/script>/)?.[1];
+  assert.ok(script, 'generated worker should append its client script');
+
+  const tags = {
+    canonical: fakeTag({ href: 'https://notes.example.com/Notion-Title-11111111111111111111111111111111' }),
+    ogUrl: fakeTag({ content: '/Notion-Title-11111111111111111111111111111111' }),
+    twitterUrl: fakeTag({ content: '/Notion-Title-11111111111111111111111111111111' }),
+  };
+  const selectors = new Map([
+    ['link[rel="canonical"]', tags.canonical],
+    ['meta[property="og:url"]', tags.ogUrl],
+    ['meta[name="twitter:url"]', tags.twitterUrl],
+  ]);
+  const observers = [];
+  class TestMutationObserver {
+    constructor(callback) { this.callback = callback; observers.push(this); }
+    observe() {}
+  }
+  const location = { protocol: 'https:', host: 'notes.example.com', pathname: path };
+  const history = {
+    state: {},
+    pushState(_state, _title, url) {
+      if (url !== undefined) location.pathname = new URL(url, 'https://notes.example.com').pathname;
+    },
+    replaceState(_state, _title, url) {
+      if (url !== undefined) location.pathname = new URL(url, 'https://notes.example.com').pathname;
+    },
+  };
+  const window = { history, XMLHttpRequest: { prototype: { open() {} } } };
+  const document = {
+    head: {},
+    body: { classList: { contains: () => false, add() {}, remove() {} } },
+    title: 'Home | Notion',
+    createElement: () => ({ addEventListener() {}, appendChild() {} }),
+    querySelector: (selector) => selectors.get(selector) || null,
+  };
+
+  runInNewContext(script, {
+    window,
+    document,
+    location,
+    MutationObserver: TestMutationObserver,
+    URL,
+    setTimeout: () => 0,
+  });
+  return { tags, observers, window, location };
+}
+
+test('client metadata preserves canonical URLs after Notion changes the head and during navigation', async (t) => {
+  const page = await runClientMetadata(t, '/');
+  const expectedHome = 'https://notes.example.com';
+  assert.equal(page.tags.canonical.getAttribute('href'), expectedHome);
+  assert.equal(page.tags.ogUrl.getAttribute('content'), expectedHome);
+  assert.equal(page.tags.twitterUrl.getAttribute('content'), expectedHome);
+
+  // A later Notion head rewrite must not replace the Worknot URLs.
+  for (const [tag, attribute] of [
+    [page.tags.canonical, 'href'],
+    [page.tags.ogUrl, 'content'],
+    [page.tags.twitterUrl, 'content'],
+  ]) {
+    tag.setAttribute(attribute, '/Notion-Title-11111111111111111111111111111111');
+  }
+  page.observers[0].callback([]);
+  assert.equal(page.tags.canonical.getAttribute('href'), expectedHome);
+  assert.equal(page.tags.ogUrl.getAttribute('content'), expectedHome);
+  assert.equal(page.tags.twitterUrl.getAttribute('content'), expectedHome);
+
+  // The same generated client script handles mapped and unmapped page navigation.
+  page.window.history.pushState({}, '', '/' + OTHER);
+  assert.equal(page.location.pathname, '/chapter');
+  assert.equal(page.tags.canonical.getAttribute('href'), 'https://notes.example.com/chapter');
+  assert.equal(page.tags.ogUrl.getAttribute('content'), 'https://notes.example.com/chapter');
+  assert.equal(page.tags.twitterUrl.getAttribute('content'), 'https://notes.example.com/chapter');
+
+  page.window.history.pushState({}, '', '/' + UNMAPPED);
+  assert.equal(page.location.pathname, '/' + UNMAPPED);
+  const expectedUnmapped = 'https://notes.example.com/' + UNMAPPED;
+  assert.equal(page.tags.canonical.getAttribute('href'), expectedUnmapped);
+  assert.equal(page.tags.ogUrl.getAttribute('content'), expectedUnmapped);
+  assert.equal(page.tags.twitterUrl.getAttribute('content'), expectedUnmapped);
 });
