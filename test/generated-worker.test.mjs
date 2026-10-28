@@ -7,12 +7,20 @@ const ROOT = '11111111111111111111111111111111';
 const CHAPTER = '22222222222222222222222222222222';
 const OTHER = '33333333333333333333333333333333';
 const dashed = (id) => id.replace(/(.{8})(.{4})(.{4})(.{4})(.{12})/, '$1-$2-$3-$4-$5');
+let script;
 let worker;
+let isolates = 0;
+// Each import is a separate module instance, like a new isolate
+async function loadWorker() {
+  const source = `${script}\n// isolate ${isolates++}`;
+  return (await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`)).default;
+}
+
 before(async () => {
   const vite = await createServer({ configFile: false, server: { middlewareMode: true, ws: false }, appType: 'custom', logLevel: 'error' });
   try {
     const { default: generate } = await vite.ssrLoadModule('/src/code.ts');
-    const script = generate({
+    script = generate({
       myDomain: 'notes.example.com',
       notionUrl: `https://source-workspace.notion.site/${ROOT}`,
       slugs: [['chapter', `https://source-workspace.notion.site/${OTHER}`]],
@@ -23,11 +31,31 @@ before(async () => {
       rss: { enabled: false }, i18n: { enabled: false, defaultLocale: 'en' },
       ogImageGeneration: { enabled: false },
     });
-    ({ default: worker } = await import(`data:text/javascript;base64,${Buffer.from(script).toString('base64')}`));
+    worker = await loadWorker();
   } finally {
     await vite.close();
   }
 });
+
+// In-memory stand-in for caches.default, shared by every worker instance
+function stubEdgeCache(t) {
+  const store = new Map();
+  globalThis.caches = {
+    default: {
+      match: async (key) => store.get(key)?.clone(),
+      put: async (key, response) => { store.set(key, response); },
+    },
+  };
+  t.after(() => { delete globalThis.caches; });
+}
+
+// Runs a request and waits for its ctx.waitUntil work, such as cache writes
+async function run(instance, request) {
+  const pending = [];
+  const response = await instance.fetch(request, {}, { waitUntil: (promise) => pending.push(promise) });
+  await Promise.all(pending);
+  return response;
+}
 
 async function forward(t, body, referer, extraHeaders = {}, path = '/api/v3/getPublicPageData') {
   const upstream = t.mock.method(globalThis, 'fetch', async () => Response.json({ spaceDomain: 'source-workspace' }));
@@ -38,6 +66,7 @@ async function forward(t, body, referer, extraHeaders = {}, path = '/api/v3/getP
   });
   const response = await worker.fetch(request, {}, { waitUntil() {} });
   assert.equal(response.status, 200);
+  assert.equal(response.headers.get('access-control-allow-origin'), null);
   assert.equal(upstream.mock.calls.length, 1);
   const [url, init] = upstream.mock.calls[0].arguments;
   assert.equal(new URL(url).hostname, 'source-workspace.notion.site');
@@ -105,4 +134,59 @@ test('compressed telemetry remains byte-for-byte intact after the upstream rebas
 test('malformed JSON passes through without fabricated site context', async (t) => {
   const forwarded = await forward(t, '{invalid', undefined);
   assert.equal(forwarded.body, '{invalid');
+});
+
+test('cross-origin preflight requests get no CORS headers', async (t) => {
+  const upstream = t.mock.method(globalThis, 'fetch', async () => new Response());
+  const response = await run(worker, new Request('https://notes.example.com/api/v3/getPublicPageData', {
+    method: 'OPTIONS',
+    headers: {
+      Origin: 'https://other.example',
+      'Access-Control-Request-Method': 'POST',
+      'Access-Control-Request-Headers': 'content-type',
+    },
+  }));
+  assert.equal(response.headers.get('access-control-allow-origin'), null);
+  assert.equal(upstream.mock.calls.length, 0);
+});
+
+test('a query string does not bypass the JS chunk cache', async (t) => {
+  stubEdgeCache(t);
+  const upstream = t.mock.method(globalThis, 'fetch', async () => new Response('chunk', {
+    headers: { 'Cache-Control': 'public, max-age=31536000, immutable' },
+  }));
+  for (const query of ['?a=1', '?b=2']) {
+    const response = await run(worker, new Request(`https://notes.example.com/_assets/chunk-abc.js${query}`));
+    assert.equal(await response.text(), 'chunk');
+  }
+  assert.equal(upstream.mock.calls.length, 1);
+  assert.equal(upstream.mock.calls[0].arguments[0], 'https://source-workspace.notion.site/_assets/chunk-abc.js');
+});
+
+test('new isolates reuse the cached foreign page check', async (t) => {
+  stubEdgeCache(t);
+  const upstream = t.mock.method(globalThis, 'fetch', async () => Response.json({ spaceDomain: 'other-workspace' }));
+  const foreignPage = '44444444444444444444444444444444';
+  for (const instance of [worker, await loadWorker()]) {
+    const response = await run(instance, new Request(`https://notes.example.com/${foreignPage}`, {
+      headers: { 'Sec-Fetch-Dest': 'document' },
+    }));
+    assert.equal(response.status, 404);
+  }
+  assert.equal(upstream.mock.calls.length, 1);
+});
+
+test('a failed foreign page check is not cached', async (t) => {
+  stubEdgeCache(t);
+  const upstream = t.mock.method(globalThis, 'fetch', async () => new Response(null, { status: 503 }));
+  const page = '55555555555555555555555555555555';
+  for (const instance of [await loadWorker(), await loadWorker()]) {
+    const response = await run(instance, new Request(`https://notes.example.com/${page}`, {
+      headers: { 'Sec-Fetch-Dest': 'document' },
+    }));
+    // The page is served, so the upstream 503 passes through
+    assert.equal(response.status, 503);
+  }
+  const checks = upstream.mock.calls.filter((call) => call.arguments[0].endsWith('/api/v3/getPublicPageData'));
+  assert.equal(checks.length, 2);
 });

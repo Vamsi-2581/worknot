@@ -483,20 +483,20 @@ ${
   // Notion's JS chunks are content-hashed and the same for every visitor, so keep
   // the rewritten copy in the edge cache instead of rewriting it on each request.
   // Only a handful of chunks contain Notion domains; the rest pass through as is.
+  // The query string is dropped so that a random one can't bypass the cache.
   async function fetchJs(request, url, ctx) {
     const cache = caches.default;
-    const cacheKey = new URL(request.url);
-    cacheKey.searchParams.set('worknot', CACHE_VERSION);
-    const cached = await cache.match(cacheKey.toString());
+    const cacheKey = new URL(url.pathname + '?worknot=' + CACHE_VERSION, request.url).toString();
+    const cached = await cache.match(cacheKey);
     if (cached) return cached;
-    const upstream = await fetch(url.toString());
+    const upstream = await fetch(url.origin + url.pathname);
     let body = await upstream.text();
     if (body.includes('notion.site') || body.includes('www.notion.so')) body = rewriteJsBody(body);
     const response = new Response(body, upstream);
     response.headers.set('Content-Type', 'text/javascript');
     response.headers.delete('Set-Cookie');
     if (upstream.ok && isAssetCacheable(upstream)) {
-      ctx.waitUntil(cache.put(cacheKey.toString(), response.clone()));
+      ctx.waitUntil(cache.put(cacheKey, response.clone()));
     }
     return response;
   }
@@ -724,30 +724,6 @@ ${
     });
   }
 
-  const corsHeaders = {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Methods': 'GET, HEAD, POST, PUT, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type',
-  };
-
-  function handleOptions(request) {
-    if (request.headers.get('Origin') !== null &&
-      request.headers.get('Access-Control-Request-Method') !== null &&
-      request.headers.get('Access-Control-Request-Headers') !== null) {
-      // Handle CORS pre-flight request.
-      return new Response(null, {
-        headers: corsHeaders
-      });
-    } else {
-      // Handle standard OPTIONS request.
-      return new Response(null, {
-        headers: {
-          'Allow': 'GET, HEAD, POST, PUT, OPTIONS',
-        }
-      });
-    }
-  }
-
   const NOTION_SITE_DOMAIN = (() => {
     try {
       return new URL(${str(notionUrl)}).hostname;
@@ -849,8 +825,10 @@ ${
   }
 
   async function fetchAndApply(request, env, ctx) {
+    // The Notion client only calls this domain from the same origin, so like
+    // notion.site, answer without CORS headers
     if (request.method === 'OPTIONS') {
-      return handleOptions(request);
+      return new Response(null, { headers: { 'Allow': 'GET, HEAD, POST, PUT, OPTIONS' } });
     }
     try {
       return rescopeConsentCookie(await handleRequest(request, env, ctx));
@@ -934,7 +912,7 @@ ${
       return notFoundResponse(url);
     }
     // The Notion client would load the page ID from the URL, so skip the custom 404 page
-    if (await isForeignPageNavigation(request, url)) {
+    if (await isForeignPageNavigation(request, url, ctx)) {
       return notFoundResponse(url, true);
     }
     let response;
@@ -1000,7 +978,6 @@ ${
         // If JSON parsing fails, continue with string replacement
       }
       response = new Response(body, response);
-      response.headers.set('Access-Control-Allow-Origin', '*');
       response.headers.delete('Content-Security-Policy');
       return response;
     } else if (url.pathname.startsWith('/api/')) {
@@ -1019,7 +996,6 @@ ${
       // Rewrite Notion space domain back to custom domain in response
       body = swapSpaceDomainInJson(body, NOTION_SPACE_DOMAIN, CUSTOM_SPACE_DOMAIN);
       response = new Response(body, response);
-      response.headers.set('Access-Control-Allow-Origin', '*');
       response.headers.delete('Content-Security-Policy');
       return response;
     } else if (IMAGE_OPTIMIZATION === 'resize' && /^\\/images?\\//.test(url.pathname)) {
@@ -1507,10 +1483,11 @@ ${
   }
 
   // Any public Notion page renders when its ID is requested on this domain, so
-  // check that unmapped page IDs belong to this site's workspace. Cached per isolate.
+  // check that unmapped page IDs belong to this site's workspace. Results are kept
+  // per isolate and in the edge cache, so new isolates don't ask Notion again.
   const pageIsForeign = new Map();
 
-  async function isForeignPageNavigation(request, url) {
+  async function isForeignPageNavigation(request, url, ctx) {
     if (!NOTION_SITE_DOMAIN.endsWith('.notion.site')) return false;
     if (!isPageNavigation(request) || NON_PAGE_PATH.test(url.pathname)) return false;
     // The mobile client opens a database peek (?p=) as the page itself.
@@ -1521,13 +1498,34 @@ ${
     const match = url.pathname.match(/[0-9a-f]{32}/);
     if (match) pageIds.push(match[0]);
     for (const pageId of pageIds) {
-      if (/^[0-9a-f]{32}$/.test(pageId) && PAGE_TO_SLUG[pageId] === undefined && await isForeignPage(pageId)) return true;
+      if (/^[0-9a-f]{32}$/.test(pageId) && PAGE_TO_SLUG[pageId] === undefined && await isForeignPage(pageId, request, ctx)) return true;
     }
     return false;
   }
 
-  async function isForeignPage(pageId) {
+  async function isForeignPage(pageId, request, ctx) {
     if (pageIsForeign.has(pageId)) return pageIsForeign.get(pageId);
+    const cache = caches.default;
+    const cacheKey = new URL('/_worknot/foreign-page/' + pageId + '?worknot=' + CACHE_VERSION, request.url).toString();
+    const cached = await cache.match(cacheKey);
+    let foreign;
+    if (cached) {
+      foreign = (await cached.text()) === 'true';
+    } else {
+      foreign = await fetchPageIsForeign(pageId);
+      // Serve the page this time, but don't cache a transient failure
+      if (foreign === null) return false;
+      ctx.waitUntil(cache.put(cacheKey, new Response(String(foreign), {
+        headers: { 'Cache-Control': 'public, max-age=86400' },
+      })));
+    }
+    if (pageIsForeign.size > 1000) pageIsForeign.clear();
+    pageIsForeign.set(pageId, foreign);
+    return foreign;
+  }
+
+  // Ask Notion which workspace the page belongs to; null if that fails
+  async function fetchPageIsForeign(pageId) {
     try {
       const response = await fetch('https://' + NOTION_SITE_DOMAIN + '/api/v3/getPublicPageData', {
         method: 'POST',
@@ -1542,16 +1540,12 @@ ${
       });
       if (!response.ok) {
         await response.body?.cancel();
-        return false;
+        return null;
       }
       const data = await response.json();
-      const foreign = !!data.spaceDomain && data.spaceDomain !== NOTION_SPACE_DOMAIN && data.publicDomainName !== NOTION_SPACE_DOMAIN;
-      if (pageIsForeign.size > 1000) pageIsForeign.clear();
-      pageIsForeign.set(pageId, foreign);
-      return foreign;
+      return !!data.spaceDomain && data.spaceDomain !== NOTION_SPACE_DOMAIN && data.publicDomainName !== NOTION_SPACE_DOMAIN;
     } catch (e) {
-      // Serve the page this time, but don't cache a transient failure
-      return false;
+      return null;
     }
   }
 
